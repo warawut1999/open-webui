@@ -1,4 +1,5 @@
 import { WEBUI_API_BASE_URL } from '$lib/constants';
+import { StorageService } from '$lib/services/storage.service';
 
 export const getAdminDetails = async (token: string) => {
 	let error = null;
@@ -693,5 +694,39 @@ export const deleteAPIKey = async (token: string) => {
 	if (error) {
 		throw error;
 	}
+	return res;
+};
+
+export const login = async (idpToken: string, idpSignature: string) => {
+	let error = null;
+
+	const res = await fetch(`${WEBUI_API_BASE_URL}/auths/login`, {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+		},
+		credentials: 'include',
+		body: JSON.stringify({
+			idpToken: idpToken,
+			idpSignature: idpSignature
+		})
+	})
+		.then(async (res) => {
+			if (!res.ok) throw await res.json();
+			StorageService.secureStorage.removeItem('idpToken');
+		    StorageService.secureStorage.removeItem('idpSignature');
+			
+			return res.json();
+		})
+		.catch((err) => {
+			console.log(err);
+			error = err.detail;
+			return null;
+		});
+
+	if (error) {
+		throw error;
+	}
+
 	return res;
 };

@@ -6,15 +6,18 @@
 	import { page } from '$app/stores';
 
 	import { getBackendConfig } from '$lib/apis';
-	import { ldapUserSignIn, getSessionUser, userSignIn, userSignUp } from '$lib/apis/auths';
+	import { ldapUserSignIn, getSessionUser, userSignIn, userSignUp, login} from '$lib/apis/auths';
 
-	import { WEBUI_API_BASE_URL, WEBUI_BASE_URL } from '$lib/constants';
+		import { AUTH_USER, CLIENTID, IDP_BASE_URL, WEBUI_API_BASE_URL, WEBUI_BASE_URL } from '$lib/constants';
 	import { WEBUI_NAME, config, user, socket } from '$lib/stores';
 
 	import { generateInitialsImage, canvasPixelTest } from '$lib/utils';
 
 	import Spinner from '$lib/components/common/Spinner.svelte';
 	import OnBoarding from '$lib/components/OnBoarding.svelte';
+	import { StorageService } from '$lib/services/storage.service';
+	import { authService } from '$lib/services/authService';
+	import { getUserInfo } from '$lib/apis/users';
 
 	const i18n = getContext('i18n');
 
@@ -25,6 +28,7 @@
 	let name = '';
 	let email = '';
 	let password = '';
+	let image = '';
 
 	let ldapUsername = '';
 
@@ -137,20 +141,48 @@
 		}
 	}
 
-	onMount(async () => {
-		if ($user !== undefined) {
-			const redirectPath = querystringValue('redirect') || '/';
-			goto(redirectPath);
+	const authLogin = async (idpToken, idpSignature) => {
+		const loginResponse = await login(idpToken, idpSignature).catch((error) => {
+			toast.error(`${error}`);
+			return null;
+		});
+		if (!loginResponse) {
+			return;
 		}
-		await checkOauthCallback();
+		
+		if(loginResponse) {
+			name = loginResponse.name
+			email = loginResponse.email
+			image = loginResponse.profile_image_url || generateInitialsImage(name)
 
-		loaded = true;
-		setLogoImage();
+			await setSessionUser(loginResponse);
+		}
+		
+	};
 
-		if (($config?.features.auth_trusted_header ?? false) || $config?.features.auth === false) {
-			await signInHandler();
+	onMount(async () => {
+		StorageService.secureStorage.setItem('idpToken', 'eyJwcml2YXRlS2V5IjoiTEg5TmhQdFcvTjljTkZHZUoyWjlHWjBvNWl1Z3U3NFZzc3lBSUdyM3prTTN2RCtuNjNGcEtvQTJwczhXZGdidE1Kbis0aC84cUgxU3RUZzBWVm85MGNFcHRvYklRZTRNeDdXVUg0d3ZoenFlcTBqbE5yeDBWTE94cERSaDluamJTMjdwMzNpaFpVbi9FclJWUFpTc2U2cjVlc01xdHRkaVhwYm5JRVY3QmlwV0M1R1Z3eGk0aWRBWVh3Si9OemNUNm4zamRSdXZ6S2RzQnZxYjBFWnBCMGgrZTFTSjEyendjVVV2eXFYUktOcXg1YUU2NFBsckE5cnRJQlNsVjVQdk00MWxaMlRwa3Eza1VrVjl3aGEwYWJycTQzeWlQbzNiRG83YUdUamJ3OVZEV2NkRVVMTkNuWEdocjJqd05QUEVTU2J5aTgrdVNZMU1rOEIwRlpic3lnPT0iLCJkYXRhIjoiQWdsc2swYy85SzVockNhdEozenNrQzFRVy9KcTg3QzJiRVdKaGU3MUlEMm5mbHdBTlZnSWVxMHFLVlpwZ0tkMy9uazJoRE8yb3YzZmlOcXBOejFhREQrdjVTalBHTUVwaFFad3Y3MzZIZ2lxdDZHL3lOdGtvVkQ4VWJvUm1yOFc0SUFmaWFBL005ZUhacHVwZlB5aSt6dFE0N1JsZUNnMjJzQ2IxZ2Y5TytpcHpldkNEOEdJUXMxSlp6Y0pGWms3SVV0QmpvaHI2WHAxajRCdGprYVNSZExadS9kMFhXRlQ2WWJUdzNzRm5CRlp6N1lhNThIT1VlNlh1SjRyYmhnZVBXd2tiMHBvNjlBYmdFWlZIeWRKQ3BVdFpZMElDajNkaUdIS1FSUWNSSTBaaUQ1OHRaYm5oeVU1ZFdaODRlcEpsUHNpT1NCN3czOGpIeVpGeHhDeEdxQWtmZEUrTWlOQnZHM1NSK1VhZ1dJPSJ9')
+		StorageService.secureStorage.setItem('idpSignature', 'PFJTQUtleVZhbHVlPjxNb2R1bHVzPnZoYStBOUU1cng5UG5JSWpSUG9yd0RPdHpZMmJMWlJvTXVBYWdKeTlDZzZyRzYxckt6QnN1SDZ6QTYzSmU2TmJRZFlrSXF2MGdRYnJkSHBiZ0V5eEVFNk40Y1g5ZExjeTZyVHJSNkN5QUo5RkdRMFNyblp2Y0tHSUlJY2JLamtveFNUY01PM2E1bit4K0s1V3Y4WFRjQk9zVnAzMjlvbndOUEZsdlhiNmZDY1RIUWQ5cmJLc1E4VGQzWXBQNjJNcGh5dHRITFh3dzlDTWFLUVVLM2UzeUwyYm83OVphS25XcUloZjQvSUJpNWxFYmdhTGVaOUF3L0lpUWNUcVhxWWhzQUhFb0ZYVm1YQ2M2cDZwckNON3lBMEptVmUyTURzUFp2OU84RGRLY1BvWXJkMitMcE9Gd0dTbmkxM21TeDdDL2c1ci9iMVUyc3dVbUR2SEpyMDg3dz09PC9Nb2R1bHVzPjxFeHBvbmVudD5BUUFCPC9FeHBvbmVudD48UD4rUjJyY25mK3RvcnFseG4zZUxibU4vaEdQVnJ1cEZnVTFnM0JxcEE0T2NxbXgxQnhaTTVCTkdYVUMrRmV1TXZsNzRJcFdDVHBQSEZibGxlQm9PNU9KVG5LenloL3BMVXgvVkcvbnkzYkdOeUJNTkFPWVkzeUNCYWRQdlROVG1tcnZiaGZQZDd2WEIrU1BEdDJTa1ZSK3JUUlNGa3YxR2M4YXFWK01DRU85b009PC9QPjxRPncxZCt2dU9qWWppSUVmZ0twTVN6WTQ4N0lPZ1p6YzJYWG90L1V2R05aYUFVbzBoN3FoZXdQcFMzOURHQmIydVdCYUl6cXV5YW5aY1VaOE9XQWxuNTdRVXRGTGdIWEk5Z09USEFDSGRpblRIOWZYcklOS1lLUk9pUWdPSGcyeXk1dGpkcUxWaklQREE1SW5EdlIvaEs1WGNsSW81eXBIYTRCUWhkTU9Tck5DVT08L1E+PERQPlRGOW9QSVBGTnptSGlpT1AxeFpicGpVYmM1djVKYkZMVWdTTnB6am53Ky81Q1lvRCtaK3lKZHBDRkJKWDg5ZXUrcXF3K2pEMndHMFFZeHNZeHJuSWcya2dZRHBPUjdTMVNyQlJTdi9IOSt0Q1FEREk5K2VJbUNvMnN5SmgvdlF1anMrRGczaGhjYURNT0dNU2ROcWpzM1RUNUpaVEw0OG0ycHM2QUk5aUF2az08L0RQPjxEUT5GT3ZMQkZESEQ5NzBHOUNQKzBPaDN0alpRVlg2WllOT1llN1l6UjVYd1htYW5ENUlHRmgvSk1TeXl2RitabHVFYnNnSGRwZnVtMUF4L0VjRFN1OHVDRWVVbzNKdVAyaVBxckI4VzZ2Rm9RWlltdGJLbUhEc0NxTkp6clBpYkRibkVPL3diRGpsQVNVOUNVWkZLbFVhV0djaFVBa25tQnVxNjhjUWpBc0JsdzA9PC9EUT48SW52ZXJzZVE+cDdULzlWMUlxV204TlRaTThxSjBGcUpTMU1pZzhMM1ZkM0kxUDFEZFJQd1V6ZGdpK1cvcDByOHBReWs5QWQ5Nk5Wb2h6ay9TQU52czN4QVUrL0pURG5DRnhuSW4xMHp5Q2w2WjNTaFkzMVp3MUNEWkdLeENRdkNFYTdRMytOOE1hYm1Za09IMi9xYjNuYjlxQXg4UUFPV3g4aWhuNUl6Q0xzL3RSTWVleGxnPTwvSW52ZXJzZVE+PEQ+SEtVb3RVS09Rc21oSWFDcTEvWXJLYWVnQlYzVmlLVFludklPakZzU1ViV3NLMXVTenN0WlZ1UWc3ZWorZDlkQ0pVV3o1Rld0WHRSQUh5bGhLSkJtRG1NSUZvSFRsQWNYY1M4YVZZenR4aEk2UTNBbzVJbU1lWmlkL3VqZE94dXAvU3QwMHhyRTVmOVFQbjFuTFRjT2lkRXRJMUJpcXZ4V2FtUUdST3J0REZCRUlyL0NoSXRpN3U5MGJVZDA4a3VaVG5HK0V5ZUY4U2JnNUt1MStwU1AvM3F0RVVobldoT1hVZHk2UTdOQTRPQVoxcXZwbG1hcXNJOElDNXdKSG1IR1NlNkhJK0J6TnViYzM2VllsTm1EVmxjUmcxOEtCdVVlUHE3aHRhTm9oQWZxVzRxTWhnN1dWU1dFU2JWNlZSN0JvNDlpZW9aSnFHeUd1WnNWU054Qm9RPT08L0Q+PC9SU0FLZXlWYWx1ZT4=')
+		onboarding = false;
+		const idpToken = StorageService.secureStorage.getItem('idpToken');
+		const idpSignature = StorageService.secureStorage.getItem('idpSignature');
+		
+		if (idpToken !== null && idpSignature !== null) {
+			await authLogin(idpToken, idpSignature);
 		} else {
-			onboarding = $config?.onboarding ?? false;
+			const llmJwtToken = authService.getAuth();
+		
+			if (llmJwtToken) {
+            	const sessionUser = await getSessionUser(llmJwtToken).catch((error) => {
+					toast.error(`${error}`);
+					return null;
+				});
+
+			   await setSessionUser(sessionUser);
+            } else {
+                StorageService.secureStorage.setItem('appClientId', CLIENTID);
+                window.location.replace(IDP_BASE_URL);
+            }
 		}
 	});
 </script>
@@ -207,7 +239,7 @@
 							</div>
 						</div>
 					</div>
-				{:else}
+				<!-- {:else}
 					<div class="  my-auto pb-10 w-full dark:text-gray-100">
 						<form
 							class=" flex flex-col justify-center"
@@ -486,7 +518,7 @@
 								</button>
 							</div>
 						{/if}
-					</div>
+					</div> -->
 				{/if}
 			</div>
 		</div>
