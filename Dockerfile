@@ -34,6 +34,7 @@ RUN npm ci
 
 COPY . .
 ENV APP_BUILD_HASH=${BUILD_HASH}
+ENV NODE_OPTIONS="--max-old-space-size=8192"
 RUN npm run build
 
 ######## WebUI backend ########
@@ -134,7 +135,7 @@ RUN if [ "$USE_OLLAMA" = "true" ]; then \
 
 # install python dependencies
 COPY --chown=$UID:$GID ./backend/requirements.txt ./requirements.txt
-
+RUN pip install -r requirements.txt
 RUN pip3 install --no-cache-dir uv && \
     if [ "$USE_CUDA" = "true" ]; then \
     # If you use CUDA the whisper and embedding model will be downloaded on first use
