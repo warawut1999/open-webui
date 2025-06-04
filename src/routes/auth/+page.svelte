@@ -22,7 +22,7 @@
 	const i18n = getContext('i18n');
 
 	let loaded = false;
-
+	
 	let mode = $config?.features.enable_ldap ? 'ldap' : 'signin';
 
 	let name = '';
