@@ -12,6 +12,7 @@ aiohttp==3.11.11
 async-timeout
 aiocache
 aiofiles
+pycryptodome
 starlette-compress==1.6.0
 
 

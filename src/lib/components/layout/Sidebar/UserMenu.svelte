@@ -209,7 +209,7 @@
 					user.set(null);
 					localStorage.removeItem('token');
 
-					location.href = res?.redirect_url ?? '/auth';
+					location.href = 'https://intranet-dev.iagroup.tech/ia-intranet-portal-web';
 					show = false;
 				}}
 			>

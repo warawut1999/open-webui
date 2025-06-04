@@ -502,9 +502,10 @@
 				<div class="flex items-center">
 					<div class="self-center mx-1.5">
 						<img
+							id="logo"
 							crossorigin="anonymous"
-							src="{WEBUI_BASE_URL}/static/favicon.png"
-							class=" size-5 -translate-x-1.5 rounded-full"
+							src="{WEBUI_BASE_URL}/static/splash.png"
+							class="size-5 -translate-x-1.5 rounded-full"
 							alt="logo"
 						/>
 					</div>
