@@ -46,6 +46,17 @@ class Token(BaseModel):
 class ApiKey(BaseModel):
     api_key: Optional[str] = None
 
+class IdpUserData(BaseModel):
+    uid: str
+    username: str
+    fullName: str
+    email: str
+    imageProfileUrl: str
+    appRole: str
+
+class IdpKey(BaseModel):
+    success: bool
+    data: IdpUserData
 
 class UserResponse(BaseModel):
     id: str
@@ -93,6 +104,9 @@ class SignupForm(BaseModel):
 class AddUserForm(SignupForm):
     role: Optional[str] = "pending"
 
+class IdpRequest(BaseModel):
+    idpToken: str
+    idpSignature: str
 
 class AuthsTable:
     def insert_new_auth(
@@ -129,16 +143,12 @@ class AuthsTable:
 
     def authenticate_user(self, email: str, password: str) -> Optional[UserModel]:
         log.info(f"authenticate_user: {email}")
-
-        user = Users.get_user_by_email(email)
-        if not user:
-            return None
-
         try:
             with get_db() as db:
-                auth = db.query(Auth).filter_by(id=user.id, active=True).first()
+                auth = db.query(Auth).filter_by(email=email, active=True).first()
                 if auth:
                     if verify_password(password, auth.password):
+                        user = Users.get_user_by_id(auth.id)
                         return user
                     else:
                         return None
@@ -159,8 +169,8 @@ class AuthsTable:
         except Exception:
             return False
 
-    def authenticate_user_by_email(self, email: str) -> Optional[UserModel]:
-        log.info(f"authenticate_user_by_email: {email}")
+    def authenticate_user_by_trusted_header(self, email: str) -> Optional[UserModel]:
+        log.info(f"authenticate_user_by_trusted_header: {email}")
         try:
             with get_db() as db:
                 auth = db.query(Auth).filter_by(email=email, active=True).first()

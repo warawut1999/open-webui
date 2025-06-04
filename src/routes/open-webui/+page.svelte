@@ -6,25 +6,29 @@
 	import { page } from '$app/stores';
 
 	import { getBackendConfig } from '$lib/apis';
-	import { ldapUserSignIn, getSessionUser, userSignIn, userSignUp } from '$lib/apis/auths';
+	import { ldapUserSignIn, getSessionUser, userSignIn, userSignUp, login} from '$lib/apis/auths';
 
-	import { WEBUI_API_BASE_URL, WEBUI_BASE_URL } from '$lib/constants';
+		import { AUTH_USER, CLIENTID, IDP_BASE_URL, WEBUI_API_BASE_URL, WEBUI_BASE_URL } from '$lib/constants';
 	import { WEBUI_NAME, config, user, socket } from '$lib/stores';
 
 	import { generateInitialsImage, canvasPixelTest } from '$lib/utils';
 
 	import Spinner from '$lib/components/common/Spinner.svelte';
 	import OnBoarding from '$lib/components/OnBoarding.svelte';
+	import { StorageService } from '$lib/services/storage.service';
+	import { authService } from '$lib/services/authService';
+	import { getUserInfo } from '$lib/apis/users';
 
 	const i18n = getContext('i18n');
 
 	let loaded = false;
-
+	
 	let mode = $config?.features.enable_ldap ? 'ldap' : 'signin';
 
 	let name = '';
 	let email = '';
 	let password = '';
+	let image = '';
 
 	let ldapUsername = '';
 
@@ -36,7 +40,6 @@
 
 	const setSessionUser = async (sessionUser) => {
 		if (sessionUser) {
-			console.log(sessionUser);
 			toast.success($i18n.t(`You're now logged in.`));
 			if (sessionUser.token) {
 				localStorage.token = sessionUser.token;
@@ -137,20 +140,46 @@
 		}
 	}
 
-	onMount(async () => {
-		if ($user !== undefined) {
-			const redirectPath = querystringValue('redirect') || '/';
-			goto(redirectPath);
+	const authLogin = async (idpToken, idpSignature) => {
+		const loginResponse = await login(idpToken, idpSignature).catch((error) => {
+			toast.error(`${error}`);
+			return null;
+		});
+		if (!loginResponse) {
+			return;
 		}
-		await checkOauthCallback();
+		
+		if(loginResponse) {
+			name = loginResponse.name
+			email = loginResponse.email
+			image = loginResponse.profile_image_url || generateInitialsImage(name)
 
-		loaded = true;
-		setLogoImage();
+			await setSessionUser(loginResponse);
+		}
+		
+	};
 
-		if (($config?.features.auth_trusted_header ?? false) || $config?.features.auth === false) {
-			await signInHandler();
+	onMount(async () => {
+		onboarding = false;
+		const idpToken = StorageService.secureStorage.getItem('idpToken');
+		const idpSignature = StorageService.secureStorage.getItem('idpSignature');
+		
+		if (idpToken !== null && idpSignature !== null) {
+			await authLogin(idpToken, idpSignature);
 		} else {
-			onboarding = $config?.onboarding ?? false;
+			const llmJwtToken = authService.getAuth();
+		
+			if (llmJwtToken) {
+            	const sessionUser = await getSessionUser(llmJwtToken).catch((error) => {
+					toast.error(`${error}`);
+					return null;
+				});
+
+			   await setSessionUser(sessionUser);
+            } else {
+                StorageService.secureStorage.setItem('appClientId', CLIENTID);
+                window.location.replace(IDP_BASE_URL);
+            }
 		}
 	});
 </script>
@@ -207,7 +236,7 @@
 							</div>
 						</div>
 					</div>
-				{:else}
+				<!-- {:else}
 					<div class="  my-auto pb-10 w-full dark:text-gray-100">
 						<form
 							class=" flex flex-col justify-center"
@@ -486,7 +515,7 @@
 								</button>
 							</div>
 						{/if}
-					</div>
+					</div> -->
 				{/if}
 			</div>
 		</div>
